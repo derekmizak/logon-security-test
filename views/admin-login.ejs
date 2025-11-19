@@ -1,0 +1,256 @@
+<%- include('partials/header', {
+  title: 'Admin Panel - PIN Authentication',
+  description: 'Admin access',
+  bodyClass: 'admin-login-page bg-dark'
+}) %>
+
+<!-- Educational: Admin PIN Entry Page
+     Key Security Features:
+     1. Obscure URL (/admin2430.html) - security through obscurity
+     2. Rate limited (3 attempts/hour)
+     3. Constant-time PIN comparison (prevents timing attacks)
+     4. Session-based authentication (15-minute timeout)
+     5. Access logging (AdminAccessLog table)
+-->
+
+<div class="container">
+  <div class="row justify-content-center align-items-center min-vh-100">
+    <div class="col-md-4 col-lg-3">
+
+      <!-- PIN Entry Card -->
+      <div class="card shadow-lg border-0 rounded-lg">
+        <div class="card-header bg-dark text-white text-center py-4">
+          <h4 class="mb-0">
+            <i class="bi bi-shield-check me-2"></i>
+            Admin Access
+          </h4>
+          <small class="text-white-50">Enter PIN to Continue</small>
+        </div>
+
+        <div class="card-body p-4">
+          <!-- Alert Container -->
+          <div id="alertContainer"></div>
+
+          <!-- Error Message (from server) -->
+          <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert alert-danger" role="alert">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <%= error %>
+            </div>
+          <% } %>
+
+          <!-- PIN Entry Form -->
+          <form id="pinForm">
+            <div class="mb-3">
+              <label for="pin" class="form-label">
+                <i class="bi bi-key-fill me-1"></i>
+                PIN Code
+              </label>
+              <input type="password"
+                     class="form-control form-control-lg text-center"
+                     id="pin"
+                     name="pin"
+                     placeholder="••••"
+                     required
+                     autocomplete="off"
+                     maxlength="4"
+                     inputmode="numeric"
+                     pattern="[0-9]{4}"
+                     style="letter-spacing: 0.5em; font-size: 1.5rem;">
+              <div class="form-text text-center">
+                <small class="text-muted">Enter your 4-digit PIN</small>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-grid">
+              <button type="submit" class="btn btn-dark btn-lg" id="pinButton">
+                <span id="buttonText">
+                  <i class="bi bi-unlock-fill me-2"></i>
+                  Unlock
+                </span>
+                <span id="buttonSpinner" class="d-none">
+                  <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Verifying...
+                </span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Security Notice -->
+          <div class="mt-4">
+            <div class="alert alert-warning py-2" role="alert">
+              <small>
+                <i class="bi bi-exclamation-circle-fill me-1"></i>
+                <strong>Security Notice:</strong> This access is logged and monitored.
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer text-center bg-light py-2">
+          <small class="text-muted">
+            <i class="bi bi-clock-fill me-1"></i>
+            Rate limited: 3 attempts/hour
+          </small>
+        </div>
+      </div>
+
+      <!-- Back to Public Login -->
+      <div class="text-center mt-3">
+        <a href="/" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>
+          Back to Login
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript for PIN Form Handling -->
+<script>
+// Educational: PIN entry form with client-side validation and AJAX submission
+
+const pinForm = document.getElementById('pinForm');
+const pinInput = document.getElementById('pin');
+const pinButton = document.getElementById('pinButton');
+const buttonText = document.getElementById('buttonText');
+const buttonSpinner = document.getElementById('buttonSpinner');
+const alertContainer = document.getElementById('alertContainer');
+
+// Auto-format PIN input (only allow numbers)
+pinInput.addEventListener('input', (e) => {
+  // Remove non-numeric characters
+  e.target.value = e.target.value.replace(/[^0-9]/g, '');
+
+  // Limit to 4 digits
+  if (e.target.value.length > 4) {
+    e.target.value = e.target.value.slice(0, 4);
+  }
+});
+
+// Form Submit Handler
+pinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const pin = pinInput.value;
+
+  // Client-side validation
+  if (pin.length !== 4) {
+    showAlert('danger', 'PIN must be exactly 4 digits');
+    return;
+  }
+
+  if (!/^[0-9]{4}$/.test(pin)) {
+    showAlert('danger', 'PIN must contain only numbers');
+    return;
+  }
+
+  // Clear previous alerts
+  alertContainer.innerHTML = '';
+
+  // Disable button and show loading state
+  pinButton.disabled = true;
+  buttonText.classList.add('d-none');
+  buttonSpinner.classList.remove('d-none');
+
+  try {
+    // Submit PIN to server
+    const response = await fetch('/admin2430.html', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pin })
+    });
+
+    const data = await response.json();
+
+    // Handle rate limiting (429 Too Many Requests)
+    if (response.status === 429) {
+      showAlert('danger', 'Too many attempts. Please wait 1 hour before trying again.');
+      pinInput.value = '';
+    }
+    // Handle invalid PIN (401 Unauthorized)
+    else if (response.status === 401) {
+      showAlert('danger', data.error || 'Invalid PIN. Access denied.');
+      pinInput.value = '';
+      pinInput.focus();
+    }
+    // Handle success
+    else if (response.ok && data.redirect) {
+      showAlert('success', 'Access granted. Redirecting...');
+      setTimeout(() => {
+        window.location.href = data.redirect;
+      }, 500);
+    }
+    // Handle other errors
+    else {
+      showAlert('danger', 'An error occurred. Please try again.');
+      pinInput.value = '';
+    }
+
+  } catch (error) {
+    console.error('PIN verification error:', error);
+    showAlert('danger', 'Network error. Please check your connection.');
+  } finally {
+    // Re-enable button (unless redirecting)
+    if (!buttonSpinner.classList.contains('d-none')) {
+      pinButton.disabled = false;
+      buttonText.classList.remove('d-none');
+      buttonSpinner.classList.add('d-none');
+    }
+  }
+});
+
+// Show Alert Helper Function
+function showAlert(type, message) {
+  const alertHTML = `
+    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  `;
+  alertContainer.innerHTML = alertHTML;
+
+  // Auto-dismiss after 5 seconds (except for success)
+  if (type !== 'success') {
+    setTimeout(() => {
+      const alert = alertContainer.querySelector('.alert');
+      if (alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      }
+    }, 5000);
+  }
+}
+
+// Focus PIN input on page load
+document.addEventListener('DOMContentLoaded', () => {
+  pinInput.focus();
+});
+
+// Keyboard shortcut: Enter key auto-focuses PIN field
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.activeElement !== pinInput) {
+    pinInput.focus();
+  }
+});
+</script>
+
+<!-- Educational Notes:
+     1. PIN entry is rate limited to 3 attempts per hour per IP
+     2. Server uses constant-time comparison to prevent timing attacks
+     3. All access attempts (success and failure) are logged
+     4. Session created on successful PIN entry (15-minute timeout)
+     5. PIN is not visible when typed (password field)
+     6. Client-side validation provides immediate feedback
+     7. Numeric keyboard automatically appears on mobile devices (inputmode="numeric")
+     8. Security through obscurity: obscure URL path (/admin2430.html)
+-->
+
+<%- include('partials/footer', {
+  needsEcharts: false,
+  scripts: []
+}) %>

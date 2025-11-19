@@ -1,0 +1,248 @@
+<%- include('partials/header', {
+  title: 'Corporate Portal - Login',
+  description: 'Secure employee login portal',
+  bodyClass: 'login-page bg-light'
+}) %>
+
+<!-- Educational: This is "The Trap" - a convincing fake login page
+     Key Design Principles:
+     1. Looks legitimate (Bootstrap styling, professional appearance)
+     2. Provides feedback (error messages, loading states)
+     3. ALWAYS fails login (honeypot behavior)
+     4. Captures credentials for analysis
+-->
+
+<div class="container">
+  <div class="row justify-content-center align-items-center min-vh-100">
+    <div class="col-md-5 col-lg-4">
+
+      <!-- Login Card -->
+      <div class="card shadow-lg border-0 rounded-lg">
+        <div class="card-header bg-primary text-white text-center py-4">
+          <!-- Educational: Generic corporate branding (convincing but fake) -->
+          <h3 class="mb-0">
+            <i class="bi bi-shield-lock me-2"></i>
+            Corporate Portal
+          </h3>
+          <small class="text-white-50">Secure Employee Access</small>
+        </div>
+
+        <div class="card-body p-4">
+          <!-- Alert Container (for error messages) -->
+          <div id="alertContainer"></div>
+
+          <!-- Login Form -->
+          <!-- Educational: Uses POST to /login endpoint (captured by public.js route) -->
+          <form id="loginForm">
+            <!-- Username Field -->
+            <div class="mb-3">
+              <label for="username" class="form-label">
+                <i class="bi bi-person-fill me-1"></i>
+                Username
+              </label>
+              <input type="text"
+                     class="form-control form-control-lg"
+                     id="username"
+                     name="username"
+                     placeholder="Enter your username"
+                     required
+                     autocomplete="username"
+                     maxlength="255">
+            </div>
+
+            <!-- Password Field -->
+            <div class="mb-3">
+              <label for="password" class="form-label">
+                <i class="bi bi-key-fill me-1"></i>
+                Password
+              </label>
+              <input type="password"
+                     class="form-control form-control-lg"
+                     id="password"
+                     name="password"
+                     placeholder="Enter your password"
+                     required
+                     autocomplete="current-password"
+                     maxlength="255">
+            </div>
+
+            <!-- Remember Me Checkbox (non-functional but adds realism) -->
+            <div class="mb-3 form-check">
+              <input type="checkbox" class="form-check-input" id="rememberMe">
+              <label class="form-check-label" for="rememberMe">
+                Remember me on this device
+              </label>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary btn-lg" id="loginButton">
+                <span id="buttonText">
+                  <i class="bi bi-box-arrow-in-right me-2"></i>
+                  Sign In
+                </span>
+                <!-- Loading Spinner (hidden by default) -->
+                <span id="buttonSpinner" class="d-none">
+                  <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Signing in...
+                </span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Additional Links (non-functional but add realism) -->
+          <div class="mt-4 text-center">
+            <a href="#" class="text-decoration-none small" onclick="showNotImplemented(); return false;">
+              <i class="bi bi-question-circle me-1"></i>
+              Forgot password?
+            </a>
+          </div>
+        </div>
+
+        <!-- Footer with Security Badge (adds legitimacy) -->
+        <div class="card-footer text-center bg-light py-3">
+          <small class="text-muted">
+            <i class="bi bi-lock-fill me-1"></i>
+            Secure Connection (SSL/TLS)
+          </small>
+        </div>
+      </div>
+
+      <!-- Educational Notice (only visible in development) -->
+      <% if (process.env.NODE_ENV !== 'production') { %>
+      <div class="alert alert-warning mt-3" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>Educational Honeypot:</strong> This is a fake login page for security research.
+        All login attempts will fail and be logged.
+      </div>
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript for Form Handling -->
+<script>
+// Educational: Client-side form handling with AJAX
+// This provides a smooth UX while capturing credentials
+
+const loginForm = document.getElementById('loginForm');
+const loginButton = document.getElementById('loginButton');
+const buttonText = document.getElementById('buttonText');
+const buttonSpinner = document.getElementById('buttonSpinner');
+const alertContainer = document.getElementById('alertContainer');
+
+// Form Submit Handler
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();  // Prevent default form submission
+
+  // Get form values
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+
+  // Clear previous alerts
+  alertContainer.innerHTML = '';
+
+  // Disable button and show loading state
+  loginButton.disabled = true;
+  buttonText.classList.add('d-none');
+  buttonSpinner.classList.remove('d-none');
+
+  try {
+    // Educational: POST credentials to /login endpoint
+    // Rate limited to 5 attempts/minute by loginLimiter middleware
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await response.json();
+
+    // Educational: This will ALWAYS be an error (honeypot always fails)
+    if (!response.ok) {
+      // Handle rate limiting (429 Too Many Requests)
+      if (response.status === 429) {
+        showAlert('danger', 'Too many login attempts. Please try again later.');
+      }
+      // Handle invalid credentials (401 Unauthorized)
+      else if (response.status === 401) {
+        // Educational: Generic error message (don't reveal if username exists)
+        showAlert('danger', 'Invalid username or password. Please try again.');
+      }
+      // Handle other errors
+      else {
+        showAlert('danger', 'An error occurred. Please try again later.');
+      }
+
+      // Clear password field (security best practice)
+      document.getElementById('password').value = '';
+    }
+    // Educational: This branch will never execute (honeypot always fails)
+    // But keeping it for code realism
+    else if (data.redirect) {
+      window.location.href = data.redirect;
+    }
+
+  } catch (error) {
+    console.error('Login error:', error);
+    showAlert('danger', 'Network error. Please check your connection and try again.');
+  } finally {
+    // Re-enable button
+    loginButton.disabled = false;
+    buttonText.classList.remove('d-none');
+    buttonSpinner.classList.add('d-none');
+  }
+});
+
+// Show Alert Helper Function
+function showAlert(type, message) {
+  const alertHTML = `
+    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+      <i class="bi bi-exclamation-circle-fill me-2"></i>
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  `;
+  alertContainer.innerHTML = alertHTML;
+
+  // Auto-dismiss after 5 seconds
+  setTimeout(() => {
+    const alert = alertContainer.querySelector('.alert');
+    if (alert) {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    }
+  }, 5000);
+}
+
+// "Not Implemented" Helper (for fake links)
+function showNotImplemented() {
+  showAlert('info', 'This feature is not available. Please contact your system administrator.');
+}
+
+// Educational: Add subtle delay on page load to appear more legitimate
+// Real login pages load resources, which takes time
+document.addEventListener('DOMContentLoaded', () => {
+  // Focus username field for better UX
+  document.getElementById('username').focus();
+});
+</script>
+
+<!-- Educational Notes:
+     1. This page is designed to look like a legitimate corporate login
+     2. ALL login attempts fail (honeypot behavior)
+     3. Credentials are captured and stored in CredentialCapture table
+     4. Rate limiting prevents brute force attacks (5 attempts/minute)
+     5. Generic error messages don't reveal if username exists (security)
+     6. Password field is cleared after failed attempt (UX best practice)
+     7. Loading states provide feedback (professional appearance)
+     8. Educational warning only shows in development mode
+-->
+
+<%- include('partials/footer', {
+  needsEcharts: false,
+  scripts: []
+}) %>

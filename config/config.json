@@ -1,0 +1,22 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "your_local_password",
+    "database": "honeypot_db",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dialect": "postgres",
+    "logging": true
+  },
+  "production": {
+    "username": "honeypot_user",
+    "password": "env:DB_PASS",
+    "database": "honeypot_db",
+    "host": "/cloudsql/INSTANCE_CONNECTION_NAME",
+    "dialect": "postgres",
+    "dialectOptions": {
+      "socketPath": "/cloudsql/INSTANCE_CONNECTION_NAME"
+    },
+    "logging": false
+  }
+}

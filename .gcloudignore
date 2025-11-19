@@ -1,0 +1,44 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore
+
+.gcloudignore
+.git
+.gitignore
+
+# Node.js dependencies (will be installed on GCP)
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.template
+
+# Documentation
+README.md
+*.md
+!requirements-prompt-v2.md
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Test files
+test/
+*.test.js
+
+# Development tools
+nodemon.json
+
+# Database files (migrations run on GCP)
+*.sql
+
+# Temporary files
+tmp/
+temp/
+.DS_Store

@@ -1,0 +1,295 @@
+# Cloud Build Configuration - CI/CD Pipeline
+# Educational: This file defines the automated deployment pipeline
+#
+# CRITICAL CONCEPT: Database migrations run BEFORE code deployment
+# This ensures zero-downtime deployments with schema changes
+#
+# Pipeline Flow:
+# 1. Install dependencies (npm ci)
+# 2. Run tests (npm test)
+# 3. Run database migrations (sequelize-cli db:migrate)
+# 4. Deploy to App Engine (gcloud app deploy)
+# 5. Verify deployment (curl health check)
+#
+# Trigger: git push to main branch (configured in Cloud Build Triggers)
+
+steps:
+  # ============================================================================
+  # STEP 1: Install Dependencies
+  # ============================================================================
+  # Educational: npm ci is faster and more reliable than npm install for CI/CD
+  # - ci = "clean install" (deletes node_modules first)
+  # - Uses exact versions from package-lock.json (reproducible builds)
+  # - Fails if package.json and package-lock.json are out of sync
+  - name: 'node:18'
+    id: 'install-dependencies'
+    entrypoint: 'npm'
+    args: ['ci']
+    waitFor: ['-']  # Start immediately (no dependencies)
+
+  # ============================================================================
+  # STEP 2: Run Tests
+  # ============================================================================
+  # Educational: Tests run BEFORE deployment to catch errors early
+  # If tests fail, the pipeline stops and deployment is prevented
+  # This is a key principle of CI/CD: "fail fast"
+  - name: 'node:18'
+    id: 'run-tests'
+    entrypoint: 'npm'
+    args: ['test']
+    waitFor: ['install-dependencies']
+
+  # ============================================================================
+  # STEP 3: Run Database Migrations (CRITICAL EDUCATIONAL STEP)
+  # ============================================================================
+  # Educational: THIS IS THE KEY INNOVATION over raw SQL approaches
+  #
+  # Why migrations run before deployment:
+  # 1. Old code can run with new schema (backward compatible)
+  # 2. Zero-downtime deployments (new instances start before old ones stop)
+  # 3. Version-controlled schema changes (git history)
+  # 4. Rollback capability (sequelize db:migrate:undo)
+  #
+  # How it works:
+  # 1. Cloud Build connects to Cloud SQL via Cloud SQL Proxy
+  # 2. Sequelize CLI reads DATABASE_URL from environment
+  # 3. Migrations run in order (timestamp-based filenames)
+  # 4. Sequelize tracks which migrations ran (SequelizeMeta table)
+  # 5. Only new migrations run (idempotent - safe to run multiple times)
+  #
+  # Security Note: DB password comes from Secret Manager (not committed to git)
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'run-migrations'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Install Cloud SQL Proxy for secure database connection
+        # Educational: The proxy creates an encrypted tunnel to Cloud SQL
+        wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
+        chmod +x cloud_sql_proxy
+
+        # Start Cloud SQL Proxy in background
+        # Educational: This allows us to connect to Cloud SQL via localhost:5432
+        # Format: project-id:region:instance-name
+        # TODO: Replace with your actual instance connection name
+        ./cloud_sql_proxy -instances=your-project-id:us-central1:honeypot-db=tcp:5432 &
+
+        # Wait for proxy to be ready
+        sleep 5
+
+        # Install Node.js and npm in this step (gcloud image doesn't have them)
+        apt-get update
+        apt-get install -y nodejs npm
+
+        # Install only Sequelize CLI and pg drivers (needed for migrations)
+        npm install --no-save sequelize-cli pg pg-hstore
+
+        # Set database connection URL
+        # Educational: This overrides config/config.json for migrations
+        # Format: postgres://user:password@host:port/database
+        # Password comes from Secret Manager (injected as substitution variable)
+        export DATABASE_URL="postgresql://${_DB_USER}:${_DB_PASS}@localhost:5432/${_DB_NAME}"
+
+        # Run migrations
+        # Educational: This command runs all pending migrations
+        # - Reads migrations/ folder
+        # - Checks SequelizeMeta table for already-run migrations
+        # - Runs only new migrations in order
+        # - Updates SequelizeMeta table
+        npx sequelize-cli db:migrate
+
+        # Kill the proxy (cleanup)
+        pkill cloud_sql_proxy
+
+    waitFor: ['run-tests']
+    # Timeout for migration step (2 minutes should be plenty)
+    timeout: '120s'
+
+  # ============================================================================
+  # STEP 4: Deploy to App Engine
+  # ============================================================================
+  # Educational: This step deploys the new code to App Engine
+  # - gcloud app deploy reads app.yaml configuration
+  # - Creates new instance(s) with new code
+  # - Routes traffic gradually (0% → 100%)
+  # - Keeps old instances running until new ones are healthy
+  # - Automatically rolls back if health checks fail
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-app'
+    args:
+      - 'app'
+      - 'deploy'
+      - 'app.yaml'
+      - '--quiet'                    # No interactive prompts
+      - '--promote'                  # Send traffic to new version
+      - '--stop-previous-version'    # Shut down old version after success
+    waitFor: ['run-migrations']
+    # Deployment timeout (10 minutes for App Engine to start instances)
+    timeout: '600s'
+
+  # ============================================================================
+  # STEP 5: Verify Deployment (Health Check)
+  # ============================================================================
+  # Educational: This step verifies the deployment succeeded
+  # If health check fails, you know immediately (within seconds of deploy)
+  # In production, you might add more verification steps:
+  # - Smoke tests (test critical user flows)
+  # - Performance tests (check latency)
+  # - Security scans
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'verify-deployment'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get the deployed URL
+        # Educational: This extracts the URL from gcloud app describe
+        APP_URL=$(gcloud app describe --format="value(defaultHostname)")
+
+        # Health check with retry logic
+        # Educational: Sometimes App Engine needs a few seconds to be ready
+        for i in {1..5}; do
+          echo "Health check attempt $i/5..."
+
+          # Curl the health endpoint
+          # -f: Fail on HTTP errors
+          # -s: Silent (no progress bar)
+          # -S: Show errors even in silent mode
+          RESPONSE=$(curl -f -s -S "https://$APP_URL/health" || echo "FAILED")
+
+          if [[ $RESPONSE == *"\"status\":\"ok\""* ]]; then
+            echo "✅ Health check passed!"
+            echo "Deployment successful: https://$APP_URL"
+            exit 0
+          fi
+
+          echo "⚠️  Health check failed, retrying in 10 seconds..."
+          sleep 10
+        done
+
+        echo "❌ Health check failed after 5 attempts"
+        exit 1
+
+    waitFor: ['deploy-app']
+    timeout: '120s'
+
+# ============================================================================
+# Substitution Variables (Secrets and Configuration)
+# ============================================================================
+# Educational: These variables are injected at build time
+# They come from Cloud Build trigger configuration or command line
+#
+# To set up secrets:
+# 1. Create secrets in Secret Manager:
+#    echo -n "your-password" | gcloud secrets create db-password --data-file=-
+#
+# 2. Grant Cloud Build access:
+#    PROJECT_NUMBER=$(gcloud projects describe your-project-id --format="value(projectNumber)")
+#    gcloud secrets add-iam-policy-binding db-password \
+#      --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com \
+#      --role=roles/secretmanager.secretAccessor
+#
+# 3. Reference in build trigger settings (Cloud Console):
+#    - Variable name: _DB_PASS
+#    - Value: $(gcloud secrets versions access latest --secret=db-password)
+#
+# Available secrets (inject via build trigger configuration):
+availableSecrets:
+  secretManager:
+    # Database password from Secret Manager
+    # Educational: This keeps passwords out of git history
+    # Format: projects/PROJECT_ID/secrets/SECRET_NAME/versions/VERSION
+    - versionName: projects/$PROJECT_ID/secrets/db-password/versions/latest
+      env: '_DB_PASS'
+
+# Substitution defaults (override in build trigger)
+# Educational: These are fallbacks if not set in trigger
+substitutions:
+  _DB_USER: 'postgres'
+  _DB_NAME: 'honeypot_db'
+
+# Build timeout (30 minutes total)
+# Educational: Prevents stuck builds from running forever
+timeout: '1800s'
+
+# Build options
+options:
+  # Use Cloud Build's high-performance machine type
+  # Educational: STANDARD machine = 1 vCPU, 4GB RAM
+  # For faster builds, use HIGH_CPU (8 vCPU) or HIGH_MEM (8 vCPU + 52GB)
+  machineType: 'N1_HIGHCPU_8'
+
+  # Logging options
+  logging: CLOUD_LOGGING_ONLY
+
+  # Substitution option (allow undefined variables to fail)
+  substitution_option: 'MUST_MATCH'
+
+# ============================================================================
+# EDUCATIONAL NOTES
+# ============================================================================
+#
+# 1. TRIGGER SETUP (via Cloud Console or gcloud):
+#    a) Go to Cloud Build → Triggers → Create Trigger
+#    b) Connect your GitHub repository
+#    c) Branch: ^main$ (regex)
+#    d) Build configuration: cloudbuild.yaml
+#    e) Advanced → Add substitution variables:
+#       - _DB_USER: postgres
+#       - _DB_NAME: honeypot_db
+#       - _DB_PASS: (from Secret Manager)
+#
+# 2. MANUAL BUILD (for testing):
+#    gcloud builds submit --config=cloudbuild.yaml \
+#      --substitutions=_DB_USER=postgres,_DB_NAME=honeypot_db,_DB_PASS=yourpass
+#
+# 3. VIEWING BUILD LOGS:
+#    - Cloud Console: Cloud Build → History → Click build
+#    - Command line: gcloud builds log <BUILD_ID> --stream
+#
+# 4. BUILD ARTIFACTS:
+#    - Build logs are stored in Cloud Logging (90 days retention)
+#    - Container images (if using Docker) in Container Registry
+#    - Build history in Cloud Build (6 months retention)
+#
+# 5. MIGRATION ROLLBACK:
+#    If a migration breaks production:
+#    a) Identify the bad migration: SELECT * FROM "SequelizeMeta";
+#    b) Rollback: sequelize db:migrate:undo
+#    c) Fix the migration file
+#    d) Commit and push (triggers new build)
+#
+# 6. ZERO-DOWNTIME DEPLOYMENT FLOW:
+#    Time 0s:   Migrations run (schema updated, old code still running)
+#    Time 30s:  New instances start (new code can read new schema)
+#    Time 60s:  Traffic shifts 0% → 50% → 100% to new instances
+#    Time 90s:  Old instances receive no more requests
+#    Time 120s: Old instances shut down after finishing requests
+#
+# 7. COST CONSIDERATIONS:
+#    - Cloud Build: 120 free build-minutes/day
+#    - N1_HIGHCPU_8: ~$0.04 per build-minute
+#    - Typical build time: 3-5 minutes = $0.12-$0.20 per build
+#    - Secret Manager: $0.06/10,000 accesses (negligible)
+#
+# 8. BEST PRACTICES:
+#    - Always run tests before migrations
+#    - Always run migrations before deployment
+#    - Use backward-compatible migrations (additive changes)
+#    - Never drop columns in same release (use two-phase deprecation)
+#    - Monitor build times (slow builds = slow feedback)
+#    - Set up Slack/email notifications for build failures
+#
+# 9. DEBUGGING FAILED BUILDS:
+#    - Check build logs for error messages
+#    - SSH into Cloud Shell: gcloud cloud-shell ssh
+#    - Reproduce locally: docker run -it node:18 /bin/bash
+#    - Test migrations locally before pushing
+#
+# 10. SECURITY CONSIDERATIONS:
+#     - Never commit passwords to git (use Secret Manager)
+#     - Limit Cloud Build service account permissions
+#     - Use VPC for Cloud SQL connection (more secure than public IP)
+#     - Rotate secrets regularly (gcloud secrets versions add)
+#     - Audit build logs for sensitive data leaks

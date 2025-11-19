@@ -1,0 +1,118 @@
+# Google App Engine Configuration
+# Educational: This file tells App Engine how to run your Node.js application
+#
+# Key Concepts:
+# - runtime: Specifies Node.js version (must match package.json engines field)
+# - instance_class: Controls VM size (F1 = smallest, cheapest)
+# - automatic_scaling: Controls when to create/destroy instances
+# - env_variables: Environment variables available to your app
+# - vpc_access_connector: Required for Cloud SQL connection via private IP
+
+runtime: nodejs18
+
+# Instance class: F1 (shared CPU, 256MB RAM)
+# Educational: F1 is the cheapest option in the free tier
+# For production under load, consider F2 (512MB) or F4 (1GB)
+instance_class: F1
+
+# Automatic Scaling Configuration
+# Educational: These settings control cost by limiting max instances
+automatic_scaling:
+  # Minimum instances to keep warm (0 = scale to zero when no traffic)
+  # Educational: 0 saves money but adds cold start latency (~2-3 seconds)
+  min_instances: 0
+
+  # Maximum instances (prevents runaway costs)
+  # Educational: With F1 instances, 5 can handle ~50-100 concurrent users
+  max_instances: 5
+
+  # Target CPU utilization before scaling up (0.0 to 1.0)
+  # Educational: 0.6 = scale up when CPU hits 60%
+  target_cpu_utilization: 0.6
+
+  # Target concurrent requests per instance before scaling
+  # Educational: Higher = fewer instances = lower cost (but higher latency)
+  target_concurrent_requests: 10
+
+# Environment Variables
+# Educational: These are available via process.env in your Node.js app
+# NEVER put secrets here - use Secret Manager instead
+env_variables:
+  NODE_ENV: 'production'
+
+  # Database configuration
+  # Educational: Cloud SQL connection uses Unix sockets, not TCP
+  # Format: project-id:region:instance-name
+  # TODO: Replace with your actual Cloud SQL instance connection name
+  # Find it: gcloud sql instances describe honeypot-db --format="value(connectionName)"
+  INSTANCE_CONNECTION_NAME: 'your-project-id:us-central1:honeypot-db'
+
+  DB_NAME: 'honeypot_db'
+  DB_USER: 'postgres'
+
+  # Educational: DB_PASS should come from Secret Manager in production
+  # For educational simplicity, we're using env_variables here
+  # In real production: Use gcloud secrets or runtime config
+  # DB_PASS: 'set-via-secret-manager'  # Commented out - see below
+
+# VPC Access Connector (Optional but Recommended)
+# Educational: Allows App Engine to connect to Cloud SQL via private IP
+# This is more secure than public IP + Cloud SQL Proxy
+# Uncomment if you've created a VPC connector:
+# vpc_access_connector:
+#   name: projects/your-project-id/locations/us-central1/connectors/honeypot-connector
+
+# Handlers (Optional - for static file optimization)
+# Educational: These rules tell App Engine to serve static files directly
+# instead of routing them through Node.js (faster + cheaper)
+handlers:
+  # Serve static files from /public directory
+  - url: /css
+    static_dir: public/css
+    secure: always
+
+  - url: /js
+    static_dir: public/js
+    secure: always
+
+  # All other requests go to Node.js app
+  - url: /.*
+    script: auto
+    secure: always
+
+# Additional Educational Notes:
+#
+# 1. DEPLOYMENT COMMAND:
+#    gcloud app deploy app.yaml
+#
+# 2. VIEWING LOGS:
+#    gcloud app logs tail -s default
+#
+# 3. COST MANAGEMENT:
+#    - F1 instances: $0.05/hour = ~$36/month if running 24/7
+#    - With min_instances: 0, you only pay when traffic exists
+#    - Free tier: 28 instance-hours/day = ~1 instance running continuously
+#
+# 4. CLOUD SQL CONNECTION:
+#    - App Engine connects via Unix socket (not TCP)
+#    - Path: /cloudsql/[INSTANCE_CONNECTION_NAME]
+#    - This is why config/database.js checks NODE_ENV
+#
+# 5. SECRETS MANAGEMENT (Production Best Practice):
+#    Instead of env_variables for DB_PASS, use:
+#    a) Create secret: gcloud secrets create db-password --data-file=-
+#    b) Grant access: gcloud secrets add-iam-policy-binding db-password \
+#                     --member=serviceAccount:your-project@appspot.gserviceaccount.com \
+#                     --role=roles/secretmanager.secretAccessor
+#    c) Access in code: const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
+#
+# 6. HEALTH CHECKS:
+#    - App Engine automatically uses /_ah/health endpoint
+#    - Our /health endpoint is for manual verification
+#    - Unhealthy instances are automatically replaced
+#
+# 7. SCALING BEHAVIOR:
+#    - Cold start: ~2-3 seconds (Node.js initialization)
+#    - Warm requests: <100ms
+#    - Scale-up trigger: CPU > 60% OR concurrent requests > 10
+#    - Scale-down: After 15 minutes of low utilization

@@ -1,0 +1,372 @@
+/* Educational Honeypot - Custom Styles
+   Purpose: Minimal custom CSS to complement Bootstrap
+   Bootstrap 5.3.x handles most styling via utility classes
+*/
+
+/* ============================================================================
+   Global Styles
+   ============================================================================ */
+
+:root {
+  /* Educational: CSS custom properties for easy theming */
+  --primary-color: #0d6efd;
+  --danger-color: #dc3545;
+  --success-color: #198754;
+  --warning-color: #ffc107;
+  --dark-color: #212529;
+  --light-bg: #f8f9fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================================
+   Login Page (The Honeypot Trap)
+   ============================================================================ */
+
+.login-page {
+  /* Educational: Subtle gradient background for professional appearance */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+}
+
+.login-page .card {
+  /* Educational: Box shadow for depth perception */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-page .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1rem 3rem rgba(0,0,0,.175) !important;
+}
+
+/* Form input focus states */
+.login-page .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* ============================================================================
+   Admin Login Page (PIN Entry)
+   ============================================================================ */
+
+.admin-login-page {
+  /* Educational: Dark theme for admin panel (professional security appearance) */
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  min-height: 100vh;
+}
+
+.admin-login-page .card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-login-page .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1rem 3rem rgba(0,0,0,.3) !important;
+}
+
+/* PIN input styling */
+#pin {
+  /* Educational: Monospace font for PIN entry (better visual feedback) */
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: bold;
+}
+
+/* ============================================================================
+   Admin Dashboard
+   ============================================================================ */
+
+.admin-dashboard-page {
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* Dashboard cards */
+.admin-dashboard-page .card {
+  border-radius: 0.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-dashboard-page .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+}
+
+/* Stats card borders */
+.card.border-primary {
+  border-left: 4px solid var(--primary-color) !important;
+}
+
+.card.border-danger {
+  border-left: 4px solid var(--danger-color) !important;
+}
+
+.card.border-warning {
+  border-left: 4px solid var(--warning-color) !important;
+}
+
+.card.border-info {
+  border-left: 4px solid #0dcaf0 !important;
+}
+
+/* Chart containers */
+#timelineChart,
+#topIPsChart,
+#topUsernamesChart,
+#requestPieChart {
+  /* Educational: Ensure charts are responsive */
+  min-height: 300px;
+}
+
+/* Table styling */
+#attemptsTable {
+  font-size: 0.9rem;
+}
+
+#attemptsTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #212529;
+}
+
+#attemptsTable tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+#attemptsTable tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.1);
+}
+
+/* Password column styling (monospace for better readability) */
+#attemptsTable td:nth-child(4) {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+/* ============================================================================
+   Buttons and Interactive Elements
+   ============================================================================ */
+
+.btn {
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,.15);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Loading spinner in buttons */
+.btn .spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.15em;
+}
+
+/* ============================================================================
+   Alerts and Notifications
+   ============================================================================ */
+
+.alert {
+  border-radius: 0.5rem;
+  animation: slideInDown 0.3s ease;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+/* Educational: Mobile-specific adjustments */
+@media (max-width: 768px) {
+  /* Stack stats cards on mobile */
+  .admin-dashboard-page .row > div[class*="col-md-3"] {
+    margin-bottom: 1rem;
+  }
+
+  /* Reduce chart heights on mobile */
+  #timelineChart,
+  #topIPsChart,
+  #topUsernamesChart,
+  #requestPieChart {
+    min-height: 250px !important;
+  }
+
+  /* Smaller font sizes for table on mobile */
+  #attemptsTable {
+    font-size: 0.8rem;
+  }
+
+  /* Hide less important table columns on very small screens */
+  @media (max-width: 576px) {
+    #attemptsTable th:nth-child(5),
+    #attemptsTable td:nth-child(5) {
+      display: none;
+    }
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 991px) {
+  #timelineChart,
+  #topIPsChart,
+  #topUsernamesChart,
+  #requestPieChart {
+    min-height: 300px;
+  }
+}
+
+/* ============================================================================
+   Utility Classes
+   ============================================================================ */
+
+/* Educational: Custom utility classes to supplement Bootstrap */
+
+.text-monospace {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.shadow-hover {
+  transition: box-shadow 0.2s ease;
+}
+
+.shadow-hover:hover {
+  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Fade-in animation for initial page load */
+.fade-in {
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   Accessibility Improvements
+   ============================================================================ */
+
+/* Educational: Improve focus indicators for keyboard navigation */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Skip to main content link (for screen readers) */
+.skip-to-main {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--primary-color);
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-to-main:focus {
+  top: 0;
+}
+
+/* ============================================================================
+   Print Styles
+   ============================================================================ */
+
+/* Educational: Optimize dashboard for printing */
+@media print {
+  /* Hide interactive elements when printing */
+  .navbar,
+  .btn,
+  #pagination,
+  .alert {
+    display: none !important;
+  }
+
+  /* Remove shadows and transitions */
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #dee2e6 !important;
+  }
+
+  /* Ensure charts are visible */
+  .card-body {
+    page-break-inside: avoid;
+  }
+
+  /* Black text for better printing */
+  body {
+    color: #000;
+  }
+
+  /* Remove background gradients */
+  .login-page,
+  .admin-login-page {
+    background: white !important;
+  }
+}
+
+/* ============================================================================
+   Dark Mode Support (Optional Future Enhancement)
+   ============================================================================ */
+
+/* Educational: Prepared for dark mode but not implemented
+   Uncomment to enable dark mode based on user preference */
+
+/*
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+  }
+
+  .card {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+  }
+
+  .table {
+    color: #e0e0e0;
+  }
+
+  .table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+*/

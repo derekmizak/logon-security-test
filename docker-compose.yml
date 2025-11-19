@@ -1,0 +1,298 @@
+# Docker Compose Configuration for Local Development
+# Educational: Orchestrates multi-container application (app + database)
+#
+# Usage:
+#   docker-compose up --build    # Build and start all services
+#   docker-compose down          # Stop and remove containers
+#   docker-compose down -v       # Also remove volumes (DELETES DATA!)
+#   docker-compose logs -f app   # Follow app logs
+#   docker-compose exec db psql -U postgres honeypot_db  # Connect to DB
+
+version: '3.8'
+
+# ============================================================================
+# Services Definition
+# ============================================================================
+services:
+
+  # ==========================================================================
+  # PostgreSQL Database Service
+  # ==========================================================================
+  db:
+    # Educational: Official PostgreSQL image from Docker Hub
+    # postgres:14-alpine = PostgreSQL 14 on Alpine Linux (~80MB vs ~350MB)
+    image: postgres:14-alpine
+
+    # Container name (easier to reference than auto-generated names)
+    container_name: honeypot-db
+
+    # Restart policy: always restart unless manually stopped
+    # Educational: Survives Docker daemon restarts and host reboots
+    restart: unless-stopped
+
+    # Environment variables for PostgreSQL initialization
+    environment:
+      # Superuser password (set on first run)
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
+
+      # Database name (created automatically on first run)
+      POSTGRES_DB: ${DB_NAME:-honeypot_db}
+
+      # Default user is 'postgres' (no need to set POSTGRES_USER)
+
+      # PostgreSQL configuration
+      # Educational: Optimize for development (trade durability for speed)
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+
+    # Port mapping: host:container
+    # Educational: Allows connecting from host machine (e.g., psql, pgAdmin)
+    ports:
+      - "5432:5432"
+
+    # Volume mapping for persistent data
+    # Educational: Data survives container restarts and recreations
+    volumes:
+      # Named volume (managed by Docker)
+      # Maps to: /var/lib/postgresql/data inside container
+      - db_data:/var/lib/postgresql/data
+
+      # Optional: Custom initialization scripts
+      # Educational: Any .sql or .sh files here run on first start
+      # - ./init-scripts:/docker-entrypoint-initdb.d
+
+    # Health check for database readiness
+    # Educational: App container waits until DB is healthy before starting
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d honeypot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Network configuration
+    networks:
+      - honeypot-network
+
+  # ==========================================================================
+  # Node.js Application Service
+  # ==========================================================================
+  app:
+    # Build configuration
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+      # Build arguments (optional)
+      args:
+        NODE_ENV: development
+
+      # Educational: For Apple Silicon (M1/M2), build for linux/amd64
+      # Uncomment if deploying to cloud (most clouds use x86_64)
+      # platform: linux/amd64
+
+    # Container name
+    container_name: honeypot-app
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Environment variables
+    # Educational: Override .env file, use values from docker-compose
+    environment:
+      # Database connection (use service name 'db' as hostname)
+      # Educational: Docker Compose creates DNS entries for service names
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
+      DB_NAME: ${DB_NAME:-honeypot_db}
+
+      # Application configuration
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 8080
+
+      # Session secret (generate with: openssl rand -hex 32)
+      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-in-production-min-32-chars}
+
+    # Port mapping
+    ports:
+      - "8080:8080"
+
+    # Volume mapping for development (hot reload)
+    # Educational: Changes to local files immediately reflect in container
+    volumes:
+      # Bind mount source code (development only)
+      # Educational: Enables live reload with nodemon
+      - .:/app
+
+      # Anonymous volume for node_modules (prevents overwriting)
+      # Educational: Use container's node_modules, not host's
+      - /app/node_modules
+
+      # Optional: Bind mount for logs
+      # - ./logs:/app/logs
+
+    # Dependency configuration
+    # Educational: Wait for database to be healthy before starting app
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # Network configuration
+    networks:
+      - honeypot-network
+
+    # Command override (optional)
+    # Educational: Use nodemon for development hot reload
+    # Uncomment for development mode:
+    # command: npm run dev
+
+    # Educational: Run migrations on startup (development convenience)
+    # In production, migrations should run in CI/CD pipeline
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 5 &&
+        echo 'Running database migrations...' &&
+        npx sequelize-cli db:migrate &&
+        echo 'Running database seeders...' &&
+        npx sequelize-cli db:seed:all &&
+        echo 'Starting application...' &&
+        node app.js
+      "
+
+# ============================================================================
+# Volumes Definition
+# ============================================================================
+# Educational: Named volumes are managed by Docker and persist data
+volumes:
+  # Database volume
+  # Educational: Maps to ./db_volume on host (if using local driver)
+  db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Educational: Store database data in project root directory
+      device: ${PWD}/db_volume
+
+# ============================================================================
+# Networks Definition
+# ============================================================================
+# Educational: Custom network allows service-to-service communication
+networks:
+  honeypot-network:
+    driver: bridge
+    # Educational: bridge = default Docker network type
+    # Containers can communicate using service names as hostnames
+
+# ============================================================================
+# Educational Notes:
+# ============================================================================
+#
+# 1. DOCKER COMPOSE WORKFLOW:
+#    - docker-compose up       # Start in foreground (see logs)
+#    - docker-compose up -d    # Start in background (detached)
+#    - docker-compose down     # Stop and remove containers
+#    - docker-compose down -v  # Also remove volumes (DELETES DATA!)
+#    - docker-compose restart  # Restart all services
+#    - docker-compose logs -f  # Follow logs
+#
+# 2. SERVICE COMMUNICATION:
+#    - App connects to database using hostname 'db'
+#    - Docker Compose creates DNS entries automatically
+#    - Example: DB_HOST=db (not localhost!)
+#
+# 3. VOLUME PERSISTENCE:
+#    - db_data volume stores PostgreSQL data
+#    - Data persists across container restarts
+#    - Located in ./db_volume directory
+#    - To reset: docker-compose down -v (DELETES ALL DATA!)
+#
+# 4. DEVELOPMENT WORKFLOW:
+#    a) Start services:
+#       docker-compose up --build
+#
+#    b) Make code changes (auto-reload with nodemon)
+#
+#    c) View logs:
+#       docker-compose logs -f app
+#
+#    d) Connect to database:
+#       docker-compose exec db psql -U postgres honeypot_db
+#
+#    e) Run migrations manually:
+#       docker-compose exec app npx sequelize-cli db:migrate
+#
+#    f) Stop services:
+#       docker-compose down
+#
+# 5. ENVIRONMENT VARIABLES:
+#    - Loaded from .env file automatically
+#    - Override with: docker-compose up --env-file .env.production
+#    - Or set in shell: export DB_PASS=mypassword
+#
+# 6. NETWORKING:
+#    - App container: http://localhost:8080
+#    - Database: localhost:5432 (from host)
+#    - Database: db:5432 (from app container)
+#
+# 7. VOLUMES:
+#    - ./db_volume = PostgreSQL data (persistent)
+#    - . = Source code (bind mount, hot reload)
+#    - /app/node_modules = Anonymous volume (container's modules)
+#
+# 8. HEALTHCHECKS:
+#    - Database: pg_isready command
+#    - App: depends_on ensures DB is healthy first
+#    - Check status: docker-compose ps
+#
+# 9. DEBUGGING:
+#    - View logs: docker-compose logs -f [service]
+#    - Shell into container: docker-compose exec app sh
+#    - Inspect network: docker network inspect honeypot-network
+#    - Check volumes: docker volume inspect logon-security-test_db_data
+#
+# 10. PRODUCTION DIFFERENCES:
+#     - Remove bind mounts (don't mount source code)
+#     - Remove nodemon (use node directly)
+#     - Run migrations in CI/CD (not on startup)
+#     - Use secrets management (not .env file)
+#     - Set NODE_ENV=production
+#
+# ============================================================================
+# Common Commands:
+# ============================================================================
+#
+# Start everything:
+#   docker-compose up --build
+#
+# Start in background:
+#   docker-compose up -d
+#
+# Stop everything:
+#   docker-compose down
+#
+# Rebuild app container:
+#   docker-compose build app
+#   docker-compose up -d app
+#
+# View logs:
+#   docker-compose logs -f app
+#   docker-compose logs -f db
+#
+# Execute command in container:
+#   docker-compose exec app npm test
+#   docker-compose exec db psql -U postgres honeypot_db
+#
+# Reset database (DELETES DATA!):
+#   docker-compose down -v
+#   rm -rf db_volume
+#   docker-compose up --build
+#
+# Check service health:
+#   docker-compose ps
+#
+# Scale services (advanced):
+#   docker-compose up --scale app=3
+#
