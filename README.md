@@ -252,8 +252,8 @@ Logon-Security-Test/
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR-USERNAME/Logon-Security-Test.git
-cd Logon-Security-Test
+git clone https://github.com/derekmizak/logon-security-test.git
+cd logon-security-test
 
 # Create db_volume directory for PostgreSQL data
 mkdir db_volume
@@ -475,8 +475,8 @@ rm -rf db_volume
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/Logon-Security-Test.git
-cd Logon-Security-Test
+git clone https://github.com/derekmizak/logon-security-test.git
+cd logon-security-test
 ```
 
 ### Step 2: Install Dependencies
@@ -1920,8 +1920,8 @@ This project is for **educational purposes only**. The authors are not responsib
 
 ## 📞 Support
 
-- **Issues:** https://github.com/YOUR-USERNAME/Logon-Security-Test/issues
-- **Discussions:** https://github.com/YOUR-USERNAME/Logon-Security-Test/discussions
+- **Issues:** https://github.com/derekmizak/logon-security-test/issues
+- **Discussions:** https://github.com/derekmizak/logon-security-test/discussions
 - **Educational questions:** Use GitHub Discussions
 
 ---
