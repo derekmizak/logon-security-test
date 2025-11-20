@@ -332,7 +332,7 @@ Stage 2: Production
 **Services (docker-compose.yml):**
 ```yaml
 db:
-  - PostgreSQL 14 Alpine (~80MB)
+  - PostgreSQL 17 Alpine (~80MB)
   - Data stored in ./db_volume
   - Port: 5432
   - Health check: pg_isready
@@ -370,7 +370,7 @@ docker-compose restart
 **Solution:**
 ```bash
 # Option 1: Stop local PostgreSQL
-brew services stop postgresql@14  # macOS
+brew services stop postgresql@17  # macOS
 sudo service postgresql stop      # Linux
 
 # Option 2: Change port in docker-compose.yml
